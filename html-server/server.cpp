@@ -9,7 +9,7 @@
 #include <cstring>
 
 #define PORT 443
-#define INDEX_FILE "index.html"  // File to serve
+#define WEB_ROOT "/root/www/"  // Change this to your directory
 
 void init_openssl() {
     SSL_load_error_strings();
@@ -50,27 +50,68 @@ void configure_context(SSL_CTX* ctx) {
     }
 }
 
-std::string read_file(const std::string& filename) {
-    std::ifstream file(filename);
+// Determine MIME type based on file extension (C++11 compatible)
+std::string get_mime_type(const std::string& path) {
+    if (path.rfind(".html") != std::string::npos) return "text/html";
+    if (path.rfind(".css") != std::string::npos) return "text/css";
+    if (path.rfind(".js") != std::string::npos) return "application/javascript";
+    if (path.rfind(".png") != std::string::npos) return "image/png";
+    if (path.rfind(".jpg") != std::string::npos || path.rfind(".jpeg") != std::string::npos) return "image/jpeg";
+    if (path.rfind(".gif") != std::string::npos) return "image/gif";
+    return "application/octet-stream";  // Default binary type
+}
+
+// Read file content into a string
+std::string read_file(const std::string& filepath) {
+    std::ifstream file(filepath, std::ios::binary);
     if (!file) return "";
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
 }
 
+// Handle HTTP request and serve the requested file
 void serve_client(SSL* ssl) {
-    std::string html_content = read_file(INDEX_FILE);
-    if (html_content.empty()) {
-        html_content = "<html><body><h1>404 Not Found</h1></body></html>";
+    char request[1024] = {0};
+    int bytes = SSL_read(ssl, request, sizeof(request) - 1);
+    if (bytes <= 0) return;
+
+    std::string request_str(request);
+    std::cout << "Received Request:\n" << request_str << std::endl;
+
+    // Extract method, path, and version from the request
+    std::istringstream req_stream(request_str);
+    std::string method, path, version;
+    req_stream >> method >> path >> version;
+
+    // Default to serving "index.html" if root is requested
+    if (path == "/") path = "/index.html";
+
+    // Construct the full file path
+    std::string file_path = WEB_ROOT + path;
+
+    // Read file content
+    std::string content = read_file(file_path);
+    bool file_found = !content.empty();
+
+    // If file is missing, return 404 error page
+    if (!file_found) {
+        content = "<html><body><h1>404 Not Found</h1></body></html>";
+        path = ".html";  // Force text/html MIME type for error page
     }
 
-    std::ostringstream response;
-    response << "HTTP/1.1 200 OK\r\n"
-             << "Content-Type: text/html\r\n"
-             << "Content-Length: " << html_content.length() << "\r\n"
-             << "Connection: close\r\n\r\n"
-             << html_content;
+    // Determine correct MIME type
+    std::string mime_type = get_mime_type(path);
 
+    // Build HTTP response
+    std::ostringstream response;
+    response << "HTTP/1.1 " << (file_found ? "200 OK" : "404 Not Found") << "\r\n"
+             << "Content-Type: " << mime_type << "\r\n"
+             << "Content-Length: " << content.length() << "\r\n"
+             << "Connection: close\r\n\r\n"
+             << content;
+
+    // Send response
     SSL_write(ssl, response.str().c_str(), response.str().length());
 }
 
