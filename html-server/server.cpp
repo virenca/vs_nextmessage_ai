@@ -91,11 +91,35 @@ void store_email(const std::string& email) {
 // Serve files and responses
 // Serve files and responses
 void serve_client(SSL* ssl) {
-    char request[2048] = {0};
-    int bytes = SSL_read(ssl, request, sizeof(request) - 1);
-    if (bytes <= 0) return;
+//    char request[2048] = {0};
+//    int bytes = SSL_read(ssl, request, sizeof(request) - 1);
+//    if (bytes <= 0) return;
 
-    std::string request_str(request);
+std::string request_str;
+char buffer[2048];
+int bytes;
+
+while ((bytes = SSL_read(ssl, buffer, sizeof(buffer) - 1)) > 0) {
+    buffer[bytes] = '\0';
+    request_str += buffer;
+    if (bytes < sizeof(buffer) - 1) break; // Stop if less than buffer size received
+}
+
+if (bytes <= 0) {
+    int err = SSL_get_error(ssl, bytes);
+    if (err == SSL_ERROR_ZERO_RETURN) {
+        std::cerr << "SSL connection closed by client.\n";
+    } else if (err == SSL_ERROR_SYSCALL) {
+        std::cerr << "SSL read error: Unexpected EOF from client.\n";
+    } else {
+        std::cerr << "SSL read error: " << err << "\n";
+        ERR_print_errors_fp(stderr);
+    }
+    return;
+}
+
+
+//    std::string request_str(request);
     std::cout << "Received Request:\n" << request_str << std::endl;
 
     // Parse request
