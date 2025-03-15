@@ -10,6 +10,7 @@
 
 #define PORT 443
 #define WEB_ROOT "/root/www/"  // Change this to your directory
+#define EMAIL_FILE "/root/emails.txt"  // File to store emails
 
 void init_openssl() {
     SSL_load_error_strings();
@@ -38,30 +39,14 @@ void configure_context(SSL_CTX* ctx) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
-
-    if (!SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION)) {
-        std::cerr << "Failed to enforce TLS 1.2+\n";
-        exit(EXIT_FAILURE);
-    }
-
-    if (!SSL_CTX_set_cipher_list(ctx, "HIGH:!aNULL:!MD5")) {
-        std::cerr << "Failed to enforce strong ciphers\n";
-        exit(EXIT_FAILURE);
-    }
 }
 
-// Determine MIME type based on file extension (C++11 compatible)
 std::string get_mime_type(const std::string& path) {
     if (path.rfind(".html") != std::string::npos) return "text/html";
     if (path.rfind(".css") != std::string::npos) return "text/css";
-    if (path.rfind(".js") != std::string::npos) return "application/javascript";
-    if (path.rfind(".png") != std::string::npos) return "image/png";
-    if (path.rfind(".jpg") != std::string::npos || path.rfind(".jpeg") != std::string::npos) return "image/jpeg";
-    if (path.rfind(".gif") != std::string::npos) return "image/gif";
-    return "application/octet-stream";  // Default binary type
+    return "application/octet-stream";
 }
 
-// Read file content into a string
 std::string read_file(const std::string& filepath) {
     std::ifstream file(filepath, std::ios::binary);
     if (!file) return "";
@@ -70,49 +55,54 @@ std::string read_file(const std::string& filepath) {
     return buffer.str();
 }
 
-// Handle HTTP request and serve the requested file
+std::string extract_email(const std::string& request_body) {
+    size_t pos = request_body.find("email=");
+    if (pos != std::string::npos) {
+        return request_body.substr(pos + 6);
+    }
+    return "";
+}
+
+void store_email(const std::string& email) {
+    std::ofstream email_file(EMAIL_FILE, std::ios::app);
+    if (email_file) {
+        email_file << email << "\n";
+    }
+}
+
 void serve_client(SSL* ssl) {
-    char request[1024] = {0};
+    char request[2048] = {0};
     int bytes = SSL_read(ssl, request, sizeof(request) - 1);
     if (bytes <= 0) return;
 
     std::string request_str(request);
-    std::cout << "Received Request:\n" << request_str << std::endl;
-
-    // Extract method, path, and version from the request
     std::istringstream req_stream(request_str);
     std::string method, path, version;
     req_stream >> method >> path >> version;
 
-    // Default to serving "index.html" if root is requested
-    if (path == "/") path = "/index.html";
-
-    // Construct the full file path
-    std::string file_path = WEB_ROOT + path;
-
-    // Read file content
-    std::string content = read_file(file_path);
-    bool file_found = !content.empty();
-
-    // If file is missing, return 404 error page
-    if (!file_found) {
-        content = "<html><body><h1>404 Not Found</h1></body></html>";
-        path = ".html";  // Force text/html MIME type for error page
+    if (method == "POST" && path == "/submit") {
+        std::string request_body = request_str.substr(request_str.find("\r\n\r\n") + 4);
+        std::string email = extract_email(request_body);
+        if (!email.empty()) {
+            store_email(email);
+        }
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+        response += "<html><body><h1>Success! You've been added to the waitlist.</h1></body></html>";
+        SSL_write(ssl, response.c_str(), response.length());
+        return;
     }
 
-    // Determine correct MIME type
-    std::string mime_type = get_mime_type(path);
+    if (path == "/") path = "/index.html";
+    std::string file_path = WEB_ROOT + path;
+    std::string content = read_file(file_path);
+    bool file_found = !content.empty();
+    if (!file_found) content = "<html><body><h1>404 Not Found</h1></body></html>";
 
-    // Build HTTP response
-    std::ostringstream response;
-    response << "HTTP/1.1 " << (file_found ? "200 OK" : "404 Not Found") << "\r\n"
-             << "Content-Type: " << mime_type << "\r\n"
-             << "Content-Length: " << content.length() << "\r\n"
-             << "Connection: close\r\n\r\n"
-             << content;
-
-    // Send response
-    SSL_write(ssl, response.str().c_str(), response.str().length());
+    std::string response = "HTTP/1.1 " + std::string(file_found ? "200 OK" : "404 Not Found") + "\r\n";
+    response += "Content-Type: " + get_mime_type(path) + "\r\n";
+    response += "Content-Length: " + std::to_string(content.length()) + "\r\nConnection: close\r\n\r\n";
+    response += content;
+    SSL_write(ssl, response.c_str(), response.length());
 }
 
 int main() {
@@ -157,7 +147,6 @@ int main() {
             std::cerr << "SSL Handshake failed\n";
             ERR_print_errors_fp(stderr);
         } else {
-            std::cout << "SSL handshake successful\n";
             serve_client(ssl);
         }
 
