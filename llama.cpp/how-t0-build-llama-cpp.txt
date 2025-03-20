@@ -1,5 +1,14 @@
+sudo apt update && sudo apt install -y build-essential cmake
 
-cd ~/llama.cpp
+
+# install ninja build for fast compilation
+sudo apt install ninja-build
+
+# assume we are at folder ~/
+
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+
 cmake -B build -G Ninja && ninja -C build
 
 cd models/
