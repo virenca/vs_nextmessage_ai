@@ -9,7 +9,14 @@ sudo apt install ninja-build
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 
+
+# build as static lib
 cmake -B build -G Ninja && ninja -C build
+
+# build as shared lib
+cmake -B build -G Ninja -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+
 
 cd models/
 wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf
