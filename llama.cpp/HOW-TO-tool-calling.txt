@@ -1,0 +1,49 @@
+tool-calling:
+
+
+(I) compile llama.cpp using your build script
+
+(II) download specific model (Qwen2.5-7B-Instruct-Q4_K_M.gguf)
+
+go to parent/root folder of llama.cpp
+
+./scripts/hf.sh --url https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+
+
+(III) run llama-server 
+
+./build/bin/llama-server --jinja -fa -m Qwen2.5-7B-Instruct-Q4_K_M.gguf
+
+
+
+
+(III) run client (curl) 
+
+curl http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d '{
+  "model": "gpt-3.5-turbo",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "my_cpp_tool",
+        "description": "Runs a C++ function on the server.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "description": "Input string for C++ function"
+            }
+          },
+          "required": ["input"]
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Run my C++ tool with input hello"
+    }
+  ]
+}'

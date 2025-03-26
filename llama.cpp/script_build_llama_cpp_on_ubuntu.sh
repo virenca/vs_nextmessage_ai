@@ -26,5 +26,5 @@ wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/
 
 # cd ~/llama.cpp
 cd .. 
-./build/bin/llama-cli -m models/mistral-7b-instruct-v0.1.Q4_K_M.gguf -p "Explain memory management in C++." -t 4
+./build/bin/llama-cli -m models/mistral-7b-instruct-v0.1.Q4_K_M.gguf -p "Explain mechanotransduction" -t 4
 
