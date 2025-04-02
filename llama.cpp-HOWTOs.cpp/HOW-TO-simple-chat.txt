@@ -1,0 +1,19 @@
+
+(I) compile llama.cpp using your build script
+
+# build with logging neabled
+cmake -B build -G Ninja -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DGGML_LOG_ENABLE=ON
+cmake --build build --config Release
+
+
+
+(II) download specific model (Qwen2.5-7B-Instruct-Q4_K_M.gguf)
+
+go to /models folder of llama.cpp
+
+wget https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf -O Meta-Llama-3.1-8B-Instruct.gguf
+
+
+(III) invoke simple chat
+
+./build/bin/llama-simple-chat -m ./models/Meta-Llama-3.1-8B-Instruct.gguf  -c 2048
